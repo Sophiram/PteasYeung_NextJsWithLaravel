@@ -28,7 +28,9 @@ return [
         explode(',', env('CORS_ALLOWED_ORIGINS', ''))
     ))),
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^https://.*\.vercel\.app$#',
+    ],
 
     'allowed_headers' => ['*'],
 
