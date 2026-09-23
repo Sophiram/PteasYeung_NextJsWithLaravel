@@ -4,82 +4,94 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminInvoiceController extends Controller
 {
-    // 🟢 GET: /api/admin/invoices (មើលបញ្ជីវិក្កយបត្រទាំងអស់ក្នុងប្រព័ន្ធ)
-    public function index()
+    /**
+     * Display a listing of all invoices in the system.
+     */
+    public function index(Request $request): JsonResponse
     {
-        // ទាញយកវិក្កយបត្រទាំងអស់ រួមទាំងព័ត៌មាន Tenant ឬ Booking បើមាន (ឧទាហរណ៍៖ជាមួយ 'user')
-        $invoices = Invoice::orderBy('created_at', 'desc')->get();
+        $invoices = Invoice::with(['booking.room.property.owner', 'booking.tenant', 'booking.owner'])
+            ->when($request->filled('payment_status'), function ($q) use ($request) {
+                $q->where('payment_status', $request->payment_status);
+            })
+            ->latest()
+            ->get();
+
         return response()->json($invoices);
     }
 
-    // 🟢 POST: /api/admin/invoices (បង្កើតវិក្កយបត្រថ្មីដោយ Admin)
-   public function store(Request $request)
-{
-    // ១. កែ Validation ឱ្យត្រូវនឹង Table
-    $validated = $request->validate([
-        'booking_id' => 'required|exists:bookings,id',
-        'electricity_start_unit' => 'required|numeric',
-        'electricity_end_unit'   => 'required|numeric',
-        'water_unit' => 'required|numeric',
-        'total_amount' => 'required|numeric',
-        'payment_status' => 'required|in:paid,unpaid,partial',
-        'due_date'   => 'required|date',
-    ]);
+    /**
+     * Store a newly created invoice by Admin.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'booking_id' => 'required|exists:bookings,id',
+            'electricity_start_unit' => 'required|numeric|min:0',
+            'electricity_end_unit' => 'required|numeric|min:0',
+            'water_unit' => 'required|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
+            'payment_status' => 'required|in:paid,unpaid,partial',
+            'due_date' => 'required|date',
+        ]);
 
-    // ២. បញ្ចូលទិន្នន័យទៅតាម Column ពិតប្រាកដ
-    $invoice = Invoice::create([
-        'booking_id'             => $request->booking_id,
-        'electricity_start_unit' => $request->electricity_start_unit,
-        'electricity_end_unit'   => $request->electricity_end_unit,
-        'water_unit'             => $request->water_unit,
-        'total_amount'           => $request->total_amount,
-        'payment_status'         => $request->payment_status,
-        'due_date'               => $request->due_date,
-    ]);
+        $invoice = Invoice::create($validated);
 
-    return response()->json([
-        'message' => 'បង្កើតវិក្កយបត្របានជោគជ័យ!',
-        'data' => $invoice
-    ], 201);
-}
+        return response()->json([
+            'message' => 'បង្កើតវិក្កយបត្របានជោគជ័យ!',
+            'data' => $invoice->load(['booking.room.property.owner', 'booking.tenant', 'booking.owner']),
+        ], 201);
+    }
 
-    // 🟡 PUT: /api/admin/invoices/{id} (កែប្រែព័ត៌មានវិក្កយបត្រ)
-    public function update(Request $request, $id)
+    /**
+     * Display the specified invoice.
+     */
+    public function show($id): JsonResponse
+    {
+        $invoice = Invoice::with(['booking.room.property.owner', 'booking.tenant', 'booking.owner'])->findOrFail($id);
+
+        return response()->json($invoice);
+    }
+
+    /**
+     * Update the specified invoice.
+     */
+    public function update(Request $request, $id): JsonResponse
     {
         $invoice = Invoice::findOrFail($id);
 
-        // កែសម្រួលលក្ខខណ្ឌឱ្យត្រូវនឹងទិន្នន័យពិតប្រាកដដែលផ្ញើមកពី Next.js
         $validated = $request->validate([
-            'booking_id'             => 'sometimes|required|exists:bookings,id',
-            'electricity_start_unit' => 'sometimes|required|numeric',
-            'electricity_end_unit'   => 'sometimes|required|numeric',
-            'water_unit'             => 'sometimes|required|numeric',
-            'total_amount'           => 'sometimes|required|numeric',
-            'payment_status'         => 'sometimes|required|in:paid,unpaid,partial',
-            'due_date'               => 'sometimes|required|date',
+            'booking_id' => 'sometimes|required|exists:bookings,id',
+            'electricity_start_unit' => 'sometimes|required|numeric|min:0',
+            'electricity_end_unit' => 'sometimes|required|numeric|min:0',
+            'water_unit' => 'sometimes|required|numeric|min:0',
+            'total_amount' => 'sometimes|required|numeric|min:0',
+            'payment_status' => 'sometimes|required|in:paid,unpaid,partial',
+            'due_date' => 'sometimes|required|date',
         ]);
 
-        // ធ្វើបច្ចុប្បន្នភាពទិន្នន័យដែលបានផ្ទៀងផ្ទាត់រួច
         $invoice->update($validated);
 
         return response()->json([
             'message' => 'ធ្វើបច្ចុប្បន្នភាពបានជោគជ័យ!',
-            'data' => $invoice
+            'data' => $invoice->load(['booking.room.property', 'booking.tenant']),
         ]);
     }
 
-    // 🔴 DELETE: /api/admin/invoices/{id} (លុបវិក្កយបត្រ)
-    public function destroy($id)
+    /**
+     * Remove the specified invoice.
+     */
+    public function destroy($id): JsonResponse
     {
         $invoice = Invoice::findOrFail($id);
         $invoice->delete();
 
         return response()->json([
-            'message' => 'លុបវិក្កយបត្របានជោគជ័យ!'
+            'message' => 'លុបវិក្កយបត្របានជោគជ័យ!',
         ]);
     }
 }

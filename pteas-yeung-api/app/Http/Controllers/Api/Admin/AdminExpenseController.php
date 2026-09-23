@@ -3,43 +3,96 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Expense; // ត្រូវប្រាកដថាមាន Model Expense
+use App\Models\Expense;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminExpenseController extends Controller
 {
-    // GET: /api/admin/expenses (មើលបញ្ជីចំណាយទាំងអស់)
-    public function index()
+    /**
+     * Display a listing of all expenses across the system.
+     */
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Expense::orderBy('created_at', 'desc')->get());
+        $expenses = Expense::with(['owner:id,name,email', 'property:id,title'])
+            ->when($request->filled('property_id'), function ($q) use ($request) {
+                $q->where('property_id', $request->property_id);
+            })
+            ->when($request->filled('owner_id'), function ($q) use ($request) {
+                $q->where('owner_id', $request->owner_id);
+            })
+            ->latest('date')
+            ->get();
+
+        return response()->json($expenses);
     }
 
-    // POST: /api/admin/expenses (បង្កើតការចំណាយថ្មី)
-    public function store(Request $request)
+    /**
+     * Store a newly created expense by Admin.
+     */
+    public function store(Request $request): JsonResponse
     {
-        $request->validate([
-            'title' => 'required|string',
-            'amount' => 'required|numeric',
+        $validated = $request->validate([
+            'owner_id' => 'nullable|exists:users,id',
+            'property_id' => 'nullable|exists:properties,id',
+            'title' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0',
             'date' => 'required|date',
-            'category' => 'nullable|string',
+            'description' => 'nullable|string|max:1000',
         ]);
 
-        $expense = Expense::create($request->all());
-        return response()->json(['message' => 'បង្កើតការចំណាយជោគជ័យ!', 'data' => $expense], 201);
+        $validated['owner_id'] = $validated['owner_id'] ?? $request->user()->id;
+
+        $expense = Expense::create($validated);
+
+        return response()->json([
+            'message' => 'បង្កើតការចំណាយជោគជ័យ!',
+            'data' => $expense->load(['owner:id,name,email', 'property:id,title']),
+        ], 201);
     }
 
-    // PUT: /api/admin/expenses/{id} (កែប្រែការចំណាយ)
-    public function update(Request $request, $id)
+    /**
+     * Display the specified expense.
+     */
+    public function show($id): JsonResponse
+    {
+        $expense = Expense::with(['owner:id,name,email', 'property:id,title'])->findOrFail($id);
+
+        return response()->json($expense);
+    }
+
+    /**
+     * Update the specified expense.
+     */
+    public function update(Request $request, $id): JsonResponse
     {
         $expense = Expense::findOrFail($id);
-        $expense->update($request->all());
-        return response()->json(['message' => 'ធ្វើបច្ចុប្បន្នភាពជោគជ័យ!', 'data' => $expense]);
+
+        $validated = $request->validate([
+            'owner_id' => 'nullable|exists:users,id',
+            'property_id' => 'nullable|exists:properties,id',
+            'title' => 'sometimes|required|string|max:255',
+            'amount' => 'sometimes|required|numeric|min:0',
+            'date' => 'sometimes|required|date',
+            'description' => 'nullable|string|max:1000',
+        ]);
+
+        $expense->update($validated);
+
+        return response()->json([
+            'message' => 'ធ្វើបច្ចុប្បន្នភាពជោគជ័យ!',
+            'data' => $expense->load(['owner:id,name,email', 'property:id,title']),
+        ]);
     }
 
-    // DELETE: /api/admin/expenses/{id} (លុបការចំណាយ)
-    public function destroy($id)
+    /**
+     * Remove the specified expense.
+     */
+    public function destroy($id): JsonResponse
     {
-        Expense::findOrFail($id)->delete();
+        $expense = Expense::findOrFail($id);
+        $expense->delete();
+
         return response()->json(['message' => 'លុបការចំណាយជោគជ័យ!']);
     }
 }

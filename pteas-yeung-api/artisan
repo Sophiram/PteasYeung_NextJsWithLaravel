@@ -6,8 +6,17 @@ use Symfony\Component\Console\Input\ArgvInput;
 
 define('LARAVEL_START', microtime(true));
 
+// Ensure custom php.ini with curl/openssl/ca-bundle is passed to child PHP server processes
+putenv('PHPRC='.__DIR__);
+$_ENV['PHPRC'] = __DIR__;
+$_SERVER['PHPRC'] = __DIR__;
+
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';
+
+if (class_exists(\Illuminate\Foundation\Console\ServeCommand::class)) {
+    \Illuminate\Foundation\Console\ServeCommand::$passthroughVariables[] = 'PHPRC';
+}
 
 // Bootstrap Laravel and handle the command...
 /** @var Application $app */

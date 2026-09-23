@@ -3,106 +3,278 @@
 namespace App\Http\Controllers\Api\Owner;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
+use App\Models\Property;
 use App\Models\Room;
+use App\Models\RoomImage;
+use App\Services\ImageStorageService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class RoomController extends Controller
 {
-    // ១. មើលបញ្ជីបន្ទប់ទាំងអស់ (Index)
-    public function index(Request $request) {
-        // 🟢 កែសម្រួល៖ ទោះបីជាមានលុកអ៊ីន ឬអត់លុកអ៊ីន ក៏យើងទាញ with('property') មកទាំងអស់ដើម្បីកុំឱ្យបាត់ទិន្នន័យលើ Frontend
-        // ប៉ុន្តែបើមាន User លុកអ៊ីន (Owner/Staff) យើងចម្រាញ់ (Filter) យកតែបន្ទប់របស់គាត់
-        if ($request->user()) {
-            $rooms = Room::whereHas('property', function($query) use ($request) {
-                $query->where('owner_id', $request->user()->id);
-            })->with('property')->get();
+    /**
+     * Display a listing of rooms for the authenticated owner.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $ownerId = $request->user()->id;
 
-            return response()->json($rooms);
-        }
+        $rooms = Room::whereHas('property', function ($query) use ($ownerId) {
+            $query->where('owner_id', $ownerId);
+        })
+            ->when($request->filled('property_id'), fn ($q) => $q->where('property_id', $request->property_id))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
+            ->with(['property:id,title,city,address', 'images', 'activeBooking.tenant:id,name,phone,email'])
+            ->latest()
+            ->paginate(15);
 
-        // សម្រាប់ភ្ញៀវទូទៅមើលលើទំព័រដើម (សាធារណៈ)
-        $rooms = Room::with('property')->get();
         return response()->json($rooms);
     }
 
-    // ២. បង្កើតបន្ទប់ថ្មី (Store)
-    public function store(Request $request) {
+    /**
+     * Store a newly created room by the owner.
+     */
+    public function store(Request $request): JsonResponse
+    {
         $validated = $request->validate([
             'property_id' => 'required|exists:properties,id',
-            'room_number' => 'required',
-            'price'       => 'required|numeric',
-            'type'        => 'nullable|string',
-            'status'      => 'nullable|string',
+            'room_number' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0',
+            'deposit' => 'nullable|numeric|min:0',
+            'type' => 'required|in:Single,Double,Studio,Apartment',
+            'status' => 'nullable|in:Available,Occupied,Maintenance',
+            'floor' => 'nullable|string|max:255',
+            'amenities' => 'nullable|array',
+            'description' => 'nullable|string|max:255',
+            'image_url' => 'nullable|url',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:4096',
         ]);
 
-        // បង្កើតបន្ទប់ជួលថ្មី និងភ្ជាប់ទៅកាន់ Property
-        $room = Room::create($validated);
+        // Authorize property ownership
+        $property = Property::where('id', $validated['property_id'])
+            ->where('owner_id', $request->user()->id)
+            ->first();
 
-        // 🟢 ថែមត្រង់នេះ៖ បោះទិន្នន័យ property ត្រឡប់ទៅវិញភ្លាមៗក្រោយបង្កើតរួច ដើម្បីកុំឱ្យ React អត់ស្គាល់
-        return response()->json($room->load('property'), 201);
-    }
-
-   // ៣. មើលព័ត៌មានលម្អិត (Show)
-    public function show($id) {
-        $room = Room::with('property')->find($id);
-
-        if (!$room) {
-            return response()->json(['message' => 'Room not found'], 404);
+        if (! $property) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized: This property does not belong to you.',
+            ], 403);
         }
-        return response()->json($room);
+
+        $validated['status'] = $validated['status'] ?? 'Available';
+        $roomData = collect($validated)->except(['images', 'image_url'])->toArray();
+
+        $room = DB::transaction(function () use ($roomData, $request) {
+            $newRoom = Room::create($roomData);
+
+            if ($request->filled('image_url')) {
+                RoomImage::create([
+                    'room_id' => $newRoom->id,
+                    'image_path' => $request->image_url,
+                ]);
+            }
+
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $storedUrl = ImageStorageService::store($image, 'rooms');
+                    RoomImage::create([
+                        'room_id' => $newRoom->id,
+                        'image_path' => $storedUrl,
+                    ]);
+                }
+            }
+
+            return $newRoom;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Room created successfully',
+            'data' => $room->load(['property', 'images']),
+        ], 201);
     }
 
-    // ៤. កែសម្រួលបន្ទប់ (Update)
-   public function update(Request $request, $id) {
-        // 🟢 កែសម្រួល៖ ប្ដូរពីការឆែក owner_id ផ្ទាល់លើបន្ទប់ មកឆែកតាមរយៈ property វិញ (ព្រោះតារាង rooms គ្មាន owner_id ទេ)
+    /**
+     * Display the specified room details.
+     */
+    public function show(Request $request, $id): JsonResponse
+    {
         $room = Room::where('id', $id)
-                    ->whereHas('property', function($query) use ($request) {
-                        $query->where('owner_id', $request->user()->id);
-                    })->firstOrFail();
+            ->whereHas('property', function ($query) use ($request) {
+                $query->where('owner_id', $request->user()->id);
+            })
+            ->with(['property.images', 'images', 'activeBooking.tenant', 'bookings.tenant'])
+            ->first();
 
-        $room->update($request->all());
+        if (! $room) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Room not found or unauthorized.',
+            ], 404);
+        }
 
-        // 🟢 ទាញទិន្នន័យ property មកជាមួយក្រោយពេល Update រួចរាល់
-        return response()->json($room->load('property'));
+        return response()->json([
+            'success' => true,
+            'data' => $room,
+        ]);
     }
 
-    // ៥. លុបបន្ទប់ (Destroy)
-    public function destroy($id, Request $request) {
+    /**
+     * Update the specified room.
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
         $room = Room::where('id', $id)
-                    ->whereHas('property', function($query) use ($request) {
-                        $query->where('owner_id', $request->user()->id);
-                    })->firstOrFail();
+            ->whereHas('property', function ($query) use ($request) {
+                $query->where('owner_id', $request->user()->id);
+            })->firstOrFail();
 
-        $room->delete();
-        return response()->json(['message' => 'Room deleted successfully']);
+        $validated = $request->validate([
+            'property_id' => 'sometimes|required|exists:properties,id',
+            'room_number' => 'sometimes|required|string|max:255',
+            'price' => 'sometimes|required|numeric|min:0',
+            'deposit' => 'nullable|numeric|min:0',
+            'type' => 'sometimes|required|in:Single,Double,Studio,Apartment',
+            'status' => 'sometimes|required|in:Available,Occupied,Maintenance',
+            'floor' => 'nullable|string|max:255',
+            'amenities' => 'nullable|array',
+            'description' => 'nullable|string|max:255',
+            'image_url' => 'nullable|url',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:4096',
+        ]);
+
+        if (isset($validated['property_id']) && $validated['property_id'] !== $room->property_id) {
+            $newProperty = Property::where('id', $validated['property_id'])
+                ->where('owner_id', $request->user()->id)
+                ->first();
+
+            if (! $newProperty) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: Target property does not belong to you.',
+                ], 403);
+            }
+        }
+
+        $roomData = collect($validated)->except(['images', 'image_url'])->toArray();
+
+        DB::transaction(function () use ($room, $roomData, $request) {
+            $room->update($roomData);
+
+            if ($request->filled('image_url')) {
+                RoomImage::create([
+                    'room_id' => $room->id,
+                    'image_path' => $request->image_url,
+                ]);
+            }
+
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $storedUrl = ImageStorageService::store($image, 'rooms');
+                    RoomImage::create([
+                        'room_id' => $room->id,
+                        'image_path' => $storedUrl,
+                    ]);
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Room updated successfully',
+            'data' => $room->fresh(['property', 'images']),
+        ]);
     }
 
-// ៦. ពិនិត្យមើលបន្ទប់ទំនេរ
-    public function checkAvailability(Request $request, $id)
+    /**
+     * Remove the specified room and its images from storage.
+     */
+    public function destroy($id, Request $request): JsonResponse
+    {
+        $room = Room::where('id', $id)
+            ->whereHas('property', function ($query) use ($request) {
+                $query->where('owner_id', $request->user()->id);
+            })->firstOrFail();
+
+        DB::transaction(function () use ($room) {
+            if ($room->images) {
+                foreach ($room->images as $image) {
+                    ImageStorageService::delete($image->image_path);
+                    $image->delete();
+                }
+            }
+
+            $room->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Room deleted successfully',
+        ]);
+    }
+
+    /**
+     * Check if the specified room is available.
+     */
+    public function checkAvailability(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'check_in'  => 'required|date',
+            'check_in' => 'required|date',
             'check_out' => 'required|date|after:check_in',
         ]);
 
-        $checkIn  = $request->check_in;
+        $checkIn = $request->check_in;
         $checkOut = $request->check_out;
 
-        $isBooked = \App\Models\Booking::where('room_id', $id)
-            ->where('status', '!=', 'cancelled')
+        $isBooked = Booking::where('room_id', $id)
+            ->whereIn('status', ['pending', 'active', 'confirmed'])
             ->where(function ($query) use ($checkIn, $checkOut) {
-                $query->whereBetween('check_in_date', [$checkIn, $checkOut])
-                    ->orWhereBetween('check_out_date', [$checkIn, $checkOut])
-                    ->orWhere(function ($q) use ($checkIn, $checkOut) {
-                        $q->where('check_in_date', '<=', $checkIn)
-                            ->where('check_out_date', '>=', $checkOut);
-                    });
+                $query->where(function ($q) use ($checkIn, $checkOut) {
+                    $q->whereNotNull('check_out_date')
+                        ->where('check_in_date', '<', $checkOut)
+                        ->where('check_out_date', '>', $checkIn);
+                })->orWhere(function ($q) use ($checkOut) {
+                    $q->whereNull('check_out_date')
+                        ->where('check_in_date', '<', $checkOut);
+                });
             })->exists();
 
         return response()->json([
-            'room_id' => $id,
-            'available' => !$isBooked,
+            'room_id' => (int) $id,
+            'available' => ! $isBooked,
             'message' => $isBooked ? 'The room is already booked' : 'The room is available',
+        ]);
+    }
+
+    /**
+     * Remove a specific room image.
+     */
+    public function deleteImage(Request $request, $id): JsonResponse
+    {
+        $image = RoomImage::with(['room.property'])->find($id);
+
+        if (! $image) {
+            return response()->json(['message' => 'Image not found'], 404);
+        }
+
+        if ($image->room->property->owner_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        ImageStorageService::delete($image->image_path);
+
+        $image->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Image deleted successfully',
         ]);
     }
 }

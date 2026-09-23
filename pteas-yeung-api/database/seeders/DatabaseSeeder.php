@@ -15,19 +15,19 @@ class DatabaseSeeder extends Seeder
     {
         // បង្កើត Admin តែម្តង
         User::updateOrCreate(
-            ['email' => 'admin@pteasyeung.com'], // ឆែកមើលអ៊ីមែលនេះ បើមានហើយវានឹង Update បើអត់ទេវានឹងបង្កើតថ្មី
+            ['email' => 'admin@pteasyeung.com'],
             [
-                'name'     => 'Super Admin',
-                'password' => Hash::make('password123'), // ដាក់លេខសម្ងាត់តាមចិត្តចង់
-                'role'     => 'super_admin', // ប្រាកដថា Field 'role' មាននៅក្នុងតារាង users
+                'name' => 'Super Admin',
+                'password' => Hash::make('password123'),
+                'role' => 'super_admin',
             ]
         );
 
         // បង្កើត Test User ធម្មតា
         User::factory()->create([
-            'name'  => 'Test User',
+            'name' => 'Test User',
             'email' => 'test@example.com',
-            'role'  => 'tenant',
+            'role' => 'tenant',
         ]);
     }
 }

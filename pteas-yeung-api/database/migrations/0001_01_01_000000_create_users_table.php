@@ -12,22 +12,22 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-                $table->id();
-                $table->string('name');
-                $table->string('email')->unique();
-                $table->string('phone')->nullable(); // បន្ថែមលេខទូរស័ព្ទ
-                $table->timestamp('email_verified_at')->nullable();
-                $table->string('password');
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('phone')->nullable(); // បន្ថែមលេខទូរស័ព្ទ
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
 
-                // បន្ថែម Role និង Status
-                $table->enum('role', ['super_admin', 'owner', 'staff', 'tenant'])->default('tenant');
-                $table->enum('status', ['active', 'inactive', 'pending'])->default('active'); // status សម្រាប់គ្រប់គ្រង User
+            // បន្ថែម Role និង Status
+            $table->enum('role', ['super_admin', 'owner', 'staff', 'tenant'])->default('tenant');
+            $table->enum('status', ['active', 'inactive', 'pending'])->default('active'); // status សម្រាប់គ្រប់គ្រង User
 
-                $table->string('id_card_number')->nullable(); // សំខាន់សម្រាប់ Owner/Tenant
-                 $table->string('profile_picture')->nullable();
-                $table->rememberToken();
-                $table->timestamps();
-            });
+            $table->string('id_card_number')->nullable(); // សំខាន់សម្រាប់ Owner/Tenant
+            $table->string('profile_picture')->nullable();
+            $table->rememberToken();
+            $table->timestamps();
+        });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();

@@ -9,7 +9,7 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-   public function up()
+    public function up()
     {
         Schema::table('bookings', function (Blueprint $table) {
             $table->foreignId('owner_id')->after('tenant_id')->constrained('users');

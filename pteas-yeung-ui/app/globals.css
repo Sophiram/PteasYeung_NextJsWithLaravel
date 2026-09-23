@@ -1,0 +1,131 @@
+/* app/globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+/* 🟢 បន្ថែមជួរមួយនេះសម្រាប់ Tailwind CSS v4 ដើម្បីឱ្យវាស្គាល់ class "dark" */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Kantumruy Pro", sans-serif;
+  --cursor-pointer: pointer;
+}
+
+/* 🎨 ៤. កូដកំណត់ពណ៌ទូទៅ */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@layer base {
+  button {
+    cursor: pointer;
+  }
+}
+
+/* បន្ថែមនៅខាងក្រោមគេបង្អស់ក្នុង app/globals.css */
+@layer base {
+  button, 
+  [role="button"], 
+  input[type="button"], 
+  input[type="submit"] {
+    cursor: pointer;
+  }
+}
+
+/* Custom slim scrollbar for sidebar & scroll panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+/* =========================================================
+   🖨️ Clean Print Rules: Print ONLY Receipt/Invoice (Never whole website)
+   ========================================================= */
+@media print {
+  /* 1. Remove interactive and navigation web elements */
+  nav,
+  header,
+  aside,
+  footer,
+  .sidebar,
+  .print\:hidden,
+  .print-hidden,
+  button {
+    display: none !important;
+  }
+
+  /* 2. Reset modal wrappers so modal overlays never clip or darken print */
+  .fixed.inset-0 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .max-h-\[95vh\] {
+    max-height: none !important;
+  }
+
+  /* 3. Base page setup - clean white background, full contrast */
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 4. Force light appearance even if dark mode is active */
+  html.dark, .dark {
+    color-scheme: light !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* 5. Ensure printable receipt is visible, centered, and unclipped */
+  #printable-receipt {
+    visibility: visible !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    padding: 12px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+}

@@ -4,42 +4,90 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Property;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PropertyController extends Controller
 {
-    // Admin មើលឃើញអចលនទ្រព្យទាំងអស់ក្នុងប្រព័ន្ធ
-    public function index() {
-        return Property::withCount('rooms')->with('owner:id,name,email')->latest()->get();
+    /**
+     * Display a listing of all properties with room counts and owner info.
+     */
+    public function index(): JsonResponse
+    {
+        $properties = Property::withCount('rooms')
+            ->with(['owner:id,name,email', 'images'])
+            ->latest()
+            ->get();
+
+        return response()->json($properties);
     }
 
-    // Admin បង្កើតអចលនទ្រព្យឱ្យទៅ Owner ណាម្នាក់
-    public function store(Request $request) {
+    /**
+     * Store a newly created property assigned to an owner by Admin.
+     */
+    public function store(Request $request): JsonResponse
+    {
         $validated = $request->validate([
-            'title' => 'required|string',
-            'address' => 'required|string',
-            'owner_id' => 'required|exists:users,id', // Admin ត្រូវជ្រើសរើស Owner
+            'owner_id' => 'required|exists:users,id',
+            'title' => 'required|string|max:255',
+            'address' => 'required|string|max:255',
+            'city' => 'required|string|max:100',
+            'description' => 'nullable|string',
+            'location_map_link' => 'nullable|string',
         ]);
 
-        return Property::create($request->all());
+        $property = Property::create($validated);
+
+        return response()->json([
+            'message' => 'Property created successfully',
+            'data' => $property->load(['owner:id,name,email', 'images']),
+        ], 201);
     }
 
-    // Admin មើលព័ត៌មានលម្អិតនៃអចលនទ្រព្យណាមួយក៏បាន
-    public function show($id) {
-        return Property::withCount('rooms')->with('owner:id,name,email')->findOrFail($id);
+    /**
+     * Display the specified property.
+     */
+    public function show($id): JsonResponse
+    {
+        $property = Property::withCount('rooms')
+            ->with(['owner:id,name,email', 'images', 'rooms'])
+            ->findOrFail($id);
+
+        return response()->json($property);
     }
 
-    // Admin កែសម្រួលបានទាំងអស់
-    public function update(Request $request, $id) {
+    /**
+     * Update the specified property.
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
         $property = Property::findOrFail($id);
-        $property->update($request->all());
-        return $property;
+
+        $validated = $request->validate([
+            'owner_id' => 'sometimes|required|exists:users,id',
+            'title' => 'sometimes|required|string|max:255',
+            'address' => 'sometimes|required|string|max:255',
+            'city' => 'sometimes|required|string|max:100',
+            'description' => 'nullable|string',
+            'location_map_link' => 'nullable|string',
+        ]);
+
+        $property->update($validated);
+
+        return response()->json([
+            'message' => 'Property updated successfully',
+            'data' => $property->load(['owner:id,name,email', 'images']),
+        ]);
     }
 
-    // Admin លុបបានទាំងអស់
-    public function destroy($id) {
+    /**
+     * Remove the specified property.
+     */
+    public function destroy($id): JsonResponse
+    {
         $property = Property::findOrFail($id);
         $property->delete();
+
         return response()->json(['message' => 'Property deleted by Admin successfully']);
     }
 }

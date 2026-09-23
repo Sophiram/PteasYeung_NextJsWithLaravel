@@ -1,0 +1,112 @@
+# ==========================================
+# PteasYeung Platform - Unified Root .gitignore
+# Security, Secret Protection & Monorepo Rules
+# ==========================================
+
+# 1. Environment variables & secrets (CRITICAL)
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+pteas-yeung-api/.env
+pteas-yeung-ui/.env
+pteas-yeung-ui/.env.local
+pteas-yeung-ui/.env.production
+
+# Allow configuration templates only
+!.env.example
+!.env.*.example
+!.env.production.example
+!pteas-yeung-api/.env.example
+!pteas-yeung-ui/.env.example
+
+# 2. Cryptographic keys & SSL certificates
+*.key
+*.pem
+*.crt
+*.pfx
+*.cert
+*.id_rsa
+*.pub
+/docker/nginx/certs/
+/docker/nginx/ssl/
+
+# 3. Database dumps, backups & storage archives
+*.sql
+*.sql.gz
+*.dump
+*.tar
+*.tar.gz
+*.zip
+*.bak
+/backups/*
+!/backups/.gitkeep
+/pteas-yeung-api/storage/app/backups/*
+!/pteas-yeung-api/storage/app/backups/.gitkeep
+
+# 4. Dependency Directories (Both Frontend & Backend)
+node_modules/
+/node_modules/
+/pteas-yeung-ui/node_modules/
+vendor/
+/vendor/
+/pteas-yeung-api/vendor/
+
+# 5. Next.js Build Outputs & Cache
+.next/
+/.next/
+/pteas-yeung-ui/.next/
+out/
+/out/
+/pteas-yeung-ui/out/
+build/
+/build/
+/pteas-yeung-ui/build/
+dist/
+/dist/
+*.tsbuildinfo
+
+# 6. Laravel Storage & Framework Cache
+/pteas-yeung-api/storage/*.key
+/pteas-yeung-api/storage/oauth-*.key
+/pteas-yeung-api/storage/app/public/temp/
+/pteas-yeung-api/storage/framework/cache/data/*
+/pteas-yeung-api/storage/framework/sessions/*
+/pteas-yeung-api/storage/framework/testing/*
+/pteas-yeung-api/storage/framework/views/*
+/pteas-yeung-api/storage/logs/*.log
+/pteas-yeung-api/bootstrap/cache/*.php
+!/pteas-yeung-api/bootstrap/cache/.gitignore
+storage/logs/*.log
+
+# 7. Testing, Coverage & Scratch Files
+.phpunit.result.cache
+/pteas-yeung-api/.phpunit.result.cache
+coverage/
+*.lcov
+scratch/
+temp/
+*.tmp
+
+# 8. Operating System & IDE Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# 9. Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -4,60 +4,55 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Property;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PropertyController extends Controller
 {
     /**
-     * ១. បង្ហាញបញ្ជីអចលនទ្រព្យទាំងអស់នៅក្នុងប្រព័ន្ធ (ភ្ញៀវទូទៅមើល)
+     * Display a listing of all properties (Public).
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        try {
-            // ទាញយកផ្ទះទាំងអស់ + ចំនួនបន្ទប់ ដោយមិនខ្វល់ថាជារបស់ Owner ណាឡើយ
-            $properties = Property::withCount('rooms')
-                ->latest()
-                ->get();
+        $properties = Property::with(['images', 'owner:id,name,phone,email,profile_picture'])
+            ->withCount('rooms')
+            ->when($request->filled('city'), fn ($q) => $q->where('city', $request->city))
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = $request->search;
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('title', 'like', "%{$search}%")
+                        ->orWhere('address', 'like', "%{$search}%")
+                        ->orWhere('city', 'like', "%{$search}%");
+                });
+            })
+            ->latest()
+            ->get();
 
-            return response()->json([
-                'success' => true,
-                'data' => $properties
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'មិនអាចទាញយកទិន្នន័យបានទេ៖ ' . $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'data' => $properties,
+        ]);
     }
 
     /**
-     * ២. បង្ហាញព័ត៌មានលម្អិតនៃអចលនទ្រព្យមួយ (ភ្ញៀវទូទៅមើល)
+     * Display the specified property details (Public).
      */
-    public function show($id)
+    public function show($id): JsonResponse
     {
-        try {
-            // រកមើលអចលនទ្រព្យ (មិនបាច់ឆែក owner_id ឡើយ ព្រោះជា Public)
-            $property = Property::withCount('rooms')->find($id);
+        $property = Property::with(['images', 'owner:id,name,phone,email,profile_picture', 'rooms.images'])
+            ->withCount('rooms')
+            ->find($id);
 
-            if (!$property) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'រកមិនឃើញអចលនទ្រព្យនេះឡើយ'
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $property
-            ], 200);
-
-        } catch (\Exception $e) {
+        if (! $property) {
             return response()->json([
                 'success' => false,
-                'message' => 'មានបញ្ហាប្រព័ន្ធ៖ ' . $e->getMessage()
-            ], 500);
+                'message' => 'រកមិនឃើញអចលនទ្រព្យនេះឡើយ',
+            ], 404);
         }
+
+        return response()->json([
+            'success' => true,
+            'data' => $property,
+        ]);
     }
 }
