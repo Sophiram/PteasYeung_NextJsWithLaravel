@@ -39,7 +39,7 @@
     "recharts": "^3.9.0",
     "sweetalert2": "^11.26.25",
     "sweetalert2-react-content": "^5.1.2",
-    "tailwind-merge": "^3.6.0",
+    "tailwind-merge": "^3.7.0",
     "zod": "^4.5.4"
   },
   "devDependencies": {
